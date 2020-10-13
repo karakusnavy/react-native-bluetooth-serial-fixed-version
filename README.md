@@ -1,3 +1,7 @@
-# react-native-bluetooth-serial-fixed-version
+## React Native Bluetooth Serial-Fixed-Version
 
-https://github.com/rusel1989/react-native-bluetooth-serial
+Fixed Library: https://github.com/rusel1989/react-native-bluetooth-serial/
+
+This library supports HC05 and species. (low 2.0)
+
+contact: karakusnavy@gmail.com
