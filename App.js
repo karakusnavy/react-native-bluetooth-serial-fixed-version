@@ -1,114 +1,179 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow strict-local
- */
-
-import React from 'react';
+import React, {Component} from 'react';
 import {
-  SafeAreaView,
   StyleSheet,
-  ScrollView,
-  View,
   Text,
-  StatusBar,
+  View,
+  Button,
+  FlatList,
+  Switch,
+  TouchableOpacity,
+  ToastAndroid,
 } from 'react-native';
+var _ = require('lodash');
+import BluetoothSerial from 'react-native-bluetooth-serial';
 
-import {
-  Header,
-  LearnMoreLinks,
-  Colors,
-  DebugInstructions,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+export default class App extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      isEnabled: false,
+      discovering: false,
+      devices: [],
+      unpairedDevices: [],
+      connected: false,
+    };
+  }
+  componentDidMount() {
+    Promise.all([BluetoothSerial.isEnabled(), BluetoothSerial.list()]).then(
+      (values) => {
+        const [isEnabled, devices] = values;
 
-const App: () => React$Node = () => {
-  return (
-    <>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView>
-        <ScrollView
-          contentInsetAdjustmentBehavior="automatic"
-          style={styles.scrollView}>
-          <Header />
-          {global.HermesInternal == null ? null : (
-            <View style={styles.engine}>
-              <Text style={styles.footer}>Engine: Hermes</Text>
-            </View>
-          )}
-          <View style={styles.body}>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Step One</Text>
-              <Text style={styles.sectionDescription}>
-                Edit <Text style={styles.highlight}>App.js</Text> to change this
-                screen and then come back to see your edits.
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>See Your Changes</Text>
-              <Text style={styles.sectionDescription}>
-                <ReloadInstructions />
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Debug</Text>
-              <Text style={styles.sectionDescription}>
-                <DebugInstructions />
-              </Text>
-            </View>
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Learn More</Text>
-              <Text style={styles.sectionDescription}>
-                Read the docs to discover what to do next:
-              </Text>
-            </View>
-            <LearnMoreLinks />
+        this.setState({isEnabled, devices});
+      },
+    );
+
+    BluetoothSerial.on('bluetoothEnabled', () => {
+      Promise.all([BluetoothSerial.isEnabled(), BluetoothSerial.list()]).then(
+        (values) => {
+          const [isEnabled, devices] = values;
+          this.setState({devices});
+        },
+      );
+
+      BluetoothSerial.on('bluetoothDisabled', () => {
+        this.setState({devices: []});
+      });
+      BluetoothSerial.on('error', (err) =>
+        console.log(`Error: ${err.message}`),
+      );
+    });
+  }
+  connect(device) {
+    this.setState({connecting: true});
+    BluetoothSerial.connect(device.id)
+      .then((res) => {
+        console.log(`Connected to device ${device.name}`);
+
+        ToastAndroid.show(
+          `Connected to device ${device.name}`,
+          ToastAndroid.SHORT,
+        );
+      })
+      .catch((err) => console.log(err.message));
+  }
+  _renderItem(item) {
+    return (
+      <TouchableOpacity onPress={() => this.connect(item.item)}>
+        <View style={styles.deviceNameWrap}>
+          <Text style={styles.deviceName}>
+            {item.item.name ? item.item.name : item.item.id}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+  enable() {
+    BluetoothSerial.enable()
+      .then((res) => this.setState({isEnabled: true}))
+      .catch((err) => Toast.showShortBottom(err.message));
+  }
+
+  disable() {
+    BluetoothSerial.disable()
+      .then((res) => this.setState({isEnabled: false}))
+      .catch((err) => Toast.showShortBottom(err.message));
+  }
+
+  toggleBluetooth(value) {
+    if (value === true) {
+      this.enable();
+    } else {
+      this.disable();
+    }
+  }
+  discoverAvailableDevices() {
+    if (this.state.discovering) {
+      return false;
+    } else {
+      this.setState({discovering: true});
+      BluetoothSerial.discoverUnpairedDevices()
+        .then((unpairedDevices) => {
+          const uniqueDevices = _.uniqBy(unpairedDevices, 'id');
+          console.log(uniqueDevices);
+          this.setState({unpairedDevices: uniqueDevices, discovering: false});
+        })
+        .catch((err) => console.log(err.message));
+    }
+  }
+  toggleSwitch() {
+    BluetoothSerial.write('T')
+      .then((res) => {
+        console.log(res);
+        console.log('Successfuly wrote to device');
+        this.setState({connected: true});
+      })
+      .catch((err) => console.log(err.message));
+  }
+  render() {
+    return (
+      <View style={styles.container}>
+        <View style={styles.toolbar}>
+          <Text style={styles.toolbarTitle}>Bluetooth Device List</Text>
+          <View style={styles.toolbarButton}>
+            <Switch
+              value={this.state.isEnabled}
+              onValueChange={(val) => this.toggleBluetooth(val)}
+            />
           </View>
-        </ScrollView>
-      </SafeAreaView>
-    </>
-  );
-};
+        </View>
+        <Button
+          onPress={this.discoverAvailableDevices.bind(this)}
+          title="Scan for Devices"
+          color="#841584"
+        />
+        <FlatList
+          style={{flex: 1}}
+          data={this.state.devices}
+          keyExtractor={(item) => item.id}
+          renderItem={(item) => this._renderItem(item)}
+        />
+        <Button
+          onPress={this.toggleSwitch.bind(this)}
+          title="Switch(On/Off)"
+          color="#841584"
+        />
+      </View>
+    );
+  }
+}
 
 const styles = StyleSheet.create({
-  scrollView: {
-    backgroundColor: Colors.lighter,
+  container: {
+    flex: 1,
+    backgroundColor: '#F5FCFF',
   },
-  engine: {
-    position: 'absolute',
-    right: 0,
+  toolbar: {
+    paddingTop: 30,
+    paddingBottom: 30,
+    flexDirection: 'row',
   },
-  body: {
-    backgroundColor: Colors.white,
-  },
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: Colors.black,
-  },
-  sectionDescription: {
+  toolbarButton: {
+    width: 50,
     marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-    color: Colors.dark,
   },
-  highlight: {
-    fontWeight: '700',
+  toolbarTitle: {
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 20,
+    flex: 1,
+    marginTop: 6,
   },
-  footer: {
-    color: Colors.dark,
-    fontSize: 12,
-    fontWeight: '600',
-    padding: 4,
-    paddingRight: 12,
-    textAlign: 'right',
+  deviceName: {
+    fontSize: 17,
+    color: 'black',
+  },
+  deviceNameWrap: {
+    margin: 10,
+    borderBottomWidth: 1,
   },
 });
-
-export default App;
